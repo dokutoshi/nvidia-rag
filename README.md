@@ -277,8 +277,8 @@ cp .env.example .env      # then fill in your own values
 
 `NVIDIA_LLM_colab_local.ipynb` needs only `HF_AUTH_TOKEN` — it has no OpenAI dependency at all.
 
-> The 2023 notebooks originally carried these values inline. They have been replaced with
-> environment lookups and the original credentials revoked.
+> The 2023 notebooks originally carried these values inline; they have been replaced with
+> environment lookups. Any historical credentials should be treated as compromised and rotated.
 
 ---
 
