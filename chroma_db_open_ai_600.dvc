@@ -1,0 +1,6 @@
+outs:
+- md5: 69e504a5b323116f4a01079a02b85652.dir
+  size: 2534910306
+  nfiles: 6
+  hash: md5
+  path: chroma_db_open_ai_600
