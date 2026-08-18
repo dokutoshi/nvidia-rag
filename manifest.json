@@ -1,0 +1,426 @@
+{
+  "$comment": "Inventory manifest for the NVIDIA docs RAG mini-project. Generated 2026-08-18. Metadata from filesystem; stack and config verified by parsing NVIDIA_LLM.ipynb after OneDrive hydration.",
+  "schema_version": "1.1",
+  "generated_at": "2026-08-18T00:00:00Z",
+
+  "project": {
+    "name": "nvidia-docs-rag",
+    "title": "Conversational RAG over NVIDIA documentation",
+    "program": "Interview Kickstart — ML SwitchUp (IK_Uplevel)",
+    "kind": "retrieval-augmented-generation",
+    "one_liner": "Crawls the docs.nvidia.com sitemap, indexes it four ways (2 embedding backends x 2 chunk sizes), and serves a conversational retrieval chain over the result.",
+    "purpose_note": "Retained deliberately as an interview-discussion project: it is a controlled comparison across embedding backends and chunk sizes, not a single happy-path pipeline.",
+    "status": "complete, not currently running",
+    "canonical_location": "OneDrive-LotusResearch/Software_Eng/IK_Uplevel/ML_SwitchUp/mini-projects/nlp"
+  },
+
+  "corpus": {
+    "source": "https://docs.nvidia.com",
+    "discovery": "sitemap index (NVIDIA.xml) -> langchain SitemapLoader with filter_urls",
+    "sitemaps": [
+      "https://docs.nvidia.com/nvidia-sitemap-202310.xml",
+      "https://docs.nvidia.com/nvda-sitemap1.xml",
+      "https://docs.nvidia.com/nvda-sitemap2.xml"
+    ],
+    "pages_enumerated": 59016,
+    "pages_evidence": "tqdm progress line in error_log.txt: 'Fetching pages: 22%|##1 | 12736/59016 [03:00<11:34, 66.65it/s]'",
+    "fetch_policy": "continue_on_failure=True",
+    "known_failures": "PDF endpoints under /deeplearning/nccl/archives/ failed and were skipped; see error_log.txt",
+    "crawl_date": "2023-10-27 (error_log.txt mtime)"
+  },
+
+  "stack": {
+    "orchestration": "LangChain",
+    "langchain_modules": [
+      "chains", "llms", "embeddings", "vectorstores", "schema",
+      "document_loaders", "document_loaders.sitemap", "docstore.document",
+      "text_splitter", "memory", "chat_models",
+      "callbacks.manager", "callbacks.streaming_stdout"
+    ],
+    "other_libraries": ["transformers", "torch", "sentence_transformers", "chromadb", "openai"],
+    "embedding_models": {
+      "open_ai": "text-embedding-ada-002",
+      "hf": "sentence-transformers/all-mpnet-base-v2"
+    },
+    "generator_models": ["meta-llama/Llama-2-7b-chat-hf", "gpt-3.5-turbo"],
+    "runtime_environment": {
+      "note": "Executed inside an NVIDIA NGC TensorFlow container",
+      "evidence": "traceback paths under /opt/tensorflow/lib/python3.10/site-packages/",
+      "python": "3.10"
+    }
+  },
+
+  "evaluation": {
+    "framework": "RAGAS",
+    "metrics": [
+      { "name": "context_precision", "measures": "relevance of retrieved chunks" },
+      { "name": "context_recall", "measures": "retrieval completeness" },
+      { "name": "faithfulness", "measures": "answer groundedness in retrieved context" },
+      { "name": "answer_relevancy", "measures": "answer addresses the question" },
+      { "name": "harmfulness", "measures": "critique-based safety check", "module": "ragas.metrics.critique" }
+    ],
+    "judge_model": {
+      "self_hosted": true,
+      "mechanism": "ragas.llms.LangchainLLM wrapper; each metric's .llm reassigned to a locally-served model",
+      "rationale": "RAGAS defaults to OpenAI for every metric evaluation. Self-hosting removes both the per-run API cost and the data-egress exposure, making repeated evaluation across configurations affordable.",
+      "location": "NVIDIA_LLM.ipynb cells 142-143"
+    },
+    "also_present": "AzureOpenAIEmbeddings imported in cell 142 — a third embedding backend beyond ada-002 and all-mpnet-base-v2.",
+    "design_note": "context_precision and context_recall isolate retrieval quality; faithfulness and answer_relevancy isolate generation quality. That separation is what makes the vector-store and chunk-size comparison attributable rather than end-to-end only.",
+    "results_status": {
+      "qualitative_comparison": {
+        "ran": true,
+        "location": "cells 106-140, section 'Competitive comparisons of LLM and Retrievers'",
+        "what_it_produced": "Saved generated answers across the retriever x generator grid (Chroma retrievers, FAISS retrievers) x (gpt-3.5-turbo, Llama-2-7b-chat-hf), available for side-by-side reading.",
+        "coverage": "51 of 120 code cells carry saved output"
+      },
+      "quantitative_scores_captured": false,
+      "why_not": "The RAGAS section failed at import: \"ImportError: cannot import name 'AzureOpenAIEmbeddings' from 'langchain.embeddings'\" (cells 142, 143). Library drift, not a design gap.",
+      "author_was_aware": "Cell 141 markdown reads: 'Note this requires OpenAIEmbeddings in the langchain package. Currently there are issues using ...'",
+      "related_breakage": "5 cells fail with \"AttributeError: module 'openai' has no attribute 'error'\" — the openai SDK v1.0 removal of the openai.error namespace. 7 code cells error in total; both causes are upstream releases from late 2023.",
+      "fix": "AzureOpenAIEmbeddings moved to the langchain_openai package; openai.error became typed exceptions on the client in SDK v1.x. Pin contemporaneous versions or update the two import sites.",
+      "recommended_next_step": "Unblock the imports and re-run to persist a table of the 5 metrics x 7 built index configurations. Stores already exist and the judge is self-hosted, so the run is compute-only with no paid API spend. Highest-value remaining work on the project.",
+      "correction_history": "An earlier pass of this manifest stated the evaluation was 'built but never run' and that no benchmark existed. Both were wrong: the qualitative comparison ran and saved outputs, and the RAGAS cells executed but errored. Corrected 2026-08-18 after inspecting per-cell execution counts and error outputs."
+    }
+  },
+
+  "author_note": {
+    "$comment": "Author's recollection of the build period, recorded as context for the failed cells. Not a forensic finding — the notebook itself attributes nothing to these events.",
+    "note": "I built the OpenAI indexes during the week of 20 November 2023 — which turned out to be the week OpenAI's board fired Sam Altman, Microsoft moved to hire him, and he was back as CEO a few days later. Everyone pivoted to Azure-hosted OpenAI overnight, and AzureOpenAIEmbeddings was being shuffled between LangChain packages while I was trying to import it. The openai SDK v1.0 rewrite had landed a couple of weeks before that and removed the openai.error namespace, which accounts for the rest of the failed cells. A weird week to be building on that stack.",
+    "corroborating_timestamps": [
+      "chroma_db_open_ai_100 built 2023-11-20 13:35 through 2023-11-21 03:53",
+      "chroma_db_open_ai_600 built 2023-11-22 16:58",
+      "faiss_openAI_index_600 built 2023-11-22 21:09"
+    ]
+  },
+
+  "notebook_structure": {
+    "cells_total": 177,
+    "cells_code": 120,
+    "declared_intent": "Cell 0: 'The notebook proceeds a structured process for RAG research'",
+    "headings_note": "Section headings are HTML (<h2>/<h3>) inside markdown cells, not markdown '#' syntax — a plain '^#' grep will find nothing.",
+    "sections": [
+      { "cell": 8, "title": "Document loader" },
+      { "cell": 20, "title": "Splitting documents into chunks prior to embedding" },
+      { "cell": 29, "title": "Embedding Models — HuggingFace Sentence Transformer; OpenAI Embedding" },
+      { "cell": 34, "title": "Store in Chroma" },
+      { "cell": 56, "title": "Loading Stored Embeddings" },
+      { "cell": 65, "title": "FAISS Vectorstore" },
+      { "cell": 78, "title": "Load all FAISS stored indexes and create retrievers" },
+      { "cell": 80, "title": "Load all Chroma stored embeddings and create retrievers" },
+      { "cell": 92, "title": "Constructing the Prompt" },
+      { "cell": 106, "title": "Competitive comparisons of LLM and Retrievers" },
+      { "cell": 109, "title": "Two RAG Models" },
+      { "cell": 110, "title": "ChatGPT-3.5 Model — Chroma Retrievers (111), FAISS Retrievers (121)" },
+      { "cell": 128, "title": "LLAMA as the LLM" },
+      { "cell": 141, "title": "RAGAS evaluation" },
+      { "cell": 157, "title": "MarkUp Approach - IGNORE (abandoned MarkupLM experiment, raw cells)" }
+    ],
+    "abandoned_work": "Cells 157-176 are raw (unexecuted) cells exploring MarkupLM for HTML-structure-aware QA, explicitly marked IGNORE by the author."
+  },
+
+  "retrieval_config": {
+    "splitters": ["RecursiveCharacterTextSplitter", "CharacterTextSplitter"],
+    "chunk_sizes": [100, 600],
+    "chunk_overlap": 20,
+    "top_k": 6,
+    "top_k_note": "search_kwargs={'k': 6} in the retriever; one k=2 variant also appears",
+    "chains": {
+      "ConversationalRetrievalChain": "primary — 24 references, uses langchain.memory for multi-turn",
+      "RetrievalQA": "secondary — 5 references, single-turn baseline"
+    },
+    "streaming": "StreamingStdOutCallbackHandler present"
+  },
+
+  "quantization": {
+    "present": true,
+    "summary": "Llama-2-7B did not fit unquantized on available hardware. Two independent quantized-inference paths are implemented, because the CUDA quantization stack does not run on Apple Silicon.",
+    "paths": [
+      {
+        "target": "NVIDIA GPU (NGC container)",
+        "mechanism": "transformers + BitsAndBytesConfig",
+        "config": "BitsAndBytesConfig(load_in_8bit_fp32_cpu_offload=False, llm_int8_threshold=200.0), device_map=\"auto\"",
+        "bit_width": 8,
+        "location": "NVIDIA_LLM.ipynb cell 97",
+        "verified": true
+      },
+      {
+        "target": "Apple Silicon M1",
+        "mechanism": "llama.cpp via langchain LlamaCpp",
+        "config": "GGUF-quantized model with n_gpu_layers offload, n_ctx, n_batch; Metal/MPS backend",
+        "location": "NVIDIA_LLM.ipynb — LlamaCpp x3, gguf, n_gpu_layers, mps",
+        "rationale": "bitsandbytes is CUDA-only and cannot run on M1, so fitting the 7B model locally required a different toolchain entirely.",
+        "verified": true
+      }
+    ],
+    "symbol_counts_in_source": {
+      "BitsAndBytesConfig": 2, "load_in_8bit": 1, "llm_int8": 1,
+      "LlamaCpp": 3, "gguf": 1, "n_gpu_layers": 1, "mps": 1,
+      "AutoModelForCausalLM": 2, "device_map": 1
+    }
+  },
+
+  "fine_tuning": {
+    "present": false,
+    "checked_for": ["LoraConfig", "lora_alpha", "get_peft_model", "peft", "SFTTrainer", "Trainer(", "load_in_4bit"],
+    "result": "Zero matches across all 177 cells of NVIDIA_LLM.ipynb and zero in test.ipynb.",
+    "conclusion": "No LoRA/PEFT adapter training is present. The work is quantized INFERENCE, not QLoRA fine-tuning. Strict QLoRA means a 4-bit NF4 base with trained LoRA adapters; what exists here is 8-bit bitsandbytes and GGUF quantization to fit the model in memory.",
+    "recommended_phrasing": "Describe as: 8-bit quantization on CUDA plus llama.cpp/GGUF on Apple Silicon, to run Llama-2-7B under a hard memory constraint. Accurate, and a stronger claim than QLoRA because it shows the same constraint solved twice on different toolchains.",
+    "caveat": "The 'hf4' directory naming refers to the HuggingFace embedding variant, not 4-bit quantization. Contents of mini-projects/nlp_complete.zip remain unchecked and could contain additional work.",
+    "correction_history": "An earlier pass of this manifest reported no quantization at all. That was a search error: it grepped the module name 'bitsandbytes' and 4-bit parameters ('load_in_4bit', 'bnb_4bit_*'), while the code uses the class 'BitsAndBytesConfig' with 8-bit parameters. Corrected 2026-08-18."
+  },
+
+  "totals": {
+    "files": 37,
+    "bytes": 35083722763,
+    "human": "32.7 GiB",
+    "source_bytes": 13357212,
+    "artifact_bytes": 35070365551,
+    "artifact_share": "99.96%",
+    "note": "File count includes this manifest. Byte totals are the pre-manifest measurement."
+  },
+
+  "source_files": [
+    {
+      "path": "NVIDIA_LLM.ipynb",
+      "bytes": 13248229,
+      "modified": "2023-11-28T19:01:04Z",
+      "role": "primary notebook — the working copy, with cell outputs retained",
+      "note": "Size is dominated by embedded outputs. This is the executed record of the project and the canonical copy."
+    },
+    {
+      "path": "test.ipynb",
+      "bytes": 12259,
+      "modified": "2024-02-14T05:01:34Z",
+      "role": "scratch/verification notebook; latest-touched source file"
+    },
+    {
+      "path": "NVIDIA.xml",
+      "bytes": 375,
+      "modified": "2023-11-17T20:08:01Z",
+      "role": "sitemap index naming the three docs.nvidia.com sitemaps used as the corpus root",
+      "verified": true
+    },
+    {
+      "path": "error_log.txt",
+      "bytes": 96158,
+      "modified": "2023-10-27T21:32:52Z",
+      "role": "crawl log — per-URL fetch failures plus the tqdm progress line that establishes the 59,016-page corpus size",
+      "verified": true
+    },
+    {
+      "path": "=1.5.0",
+      "bytes": 191,
+      "modified": "2023-10-28T14:35:42Z",
+      "role": "conda channel list (conda-forge, defaults, nvidia, pytorch) captured by a shell-redirect slip in a conda/pip command",
+      "verified": true,
+      "disposable": true
+    },
+    {
+      "path": "1.5.0",
+      "bytes": 0,
+      "modified": "2023-10-28T14:50:04Z",
+      "role": "same redirect artifact, empty",
+      "disposable": true
+    }
+  ],
+
+  "experiment_matrix": {
+    "$comment": "Vector stores built across two embedding backends and two chunk sizes, in two store engines. One cell was never built.",
+    "dimensions": {
+      "engine": ["chroma", "faiss"],
+      "embeddings": ["hf (all-mpnet-base-v2)", "open_ai (text-embedding-ada-002)"],
+      "chunk_size": [100, 600]
+    },
+    "built": 7,
+    "possible": 8,
+    "missing": [
+      {
+        "cell": "faiss + open_ai + chunk_size=100",
+        "expected_dir": "faiss_openAI_index_100",
+        "note": "Absent. Chroma's openai_100 store is the largest artifact at 17.9 GiB, so this cell was plausibly skipped on embedding cost or disk grounds."
+      }
+    ]
+  },
+
+  "artifacts": [
+    {
+      "dir": "chroma_db_open_ai_100",
+      "engine": "chroma", "embeddings": "open_ai", "chunk_size": 100,
+      "bytes": 19196034901, "human": "17.9 GiB",
+      "built": "2023-11-20T13:35:40Z .. 2023-11-21T03:53:49Z",
+      "largest": true,
+      "files": [
+        { "path": "chroma-embeddings.parquet", "bytes": 12602149990 },
+        { "path": "chroma-collections.parquet", "bytes": 559 },
+        { "path": "index/index_a8ff68b5-8e20-4f79-bd63-bb0ed87d3f41.bin", "bytes": 6534834460 },
+        { "path": "index/uuid_to_id_a8ff68b5-8e20-4f79-bd63-bb0ed87d3f41.pkl", "bytes": 41416446 },
+        { "path": "index/id_to_uuid_a8ff68b5-8e20-4f79-bd63-bb0ed87d3f41.pkl", "bytes": 17633337 },
+        { "path": "index/index_metadata_a8ff68b5-8e20-4f79-bd63-bb0ed87d3f41.pkl", "bytes": 109 }
+      ]
+    },
+    {
+      "dir": "chroma_db_hf4_100",
+      "engine": "chroma", "embeddings": "hf", "chunk_size": 100,
+      "bytes": 7978020076, "human": "7.4 GiB",
+      "built": "2023-11-20T07:37:21Z .. 2023-11-20T09:21:28Z",
+      "files": [
+        { "path": "chroma-embeddings.parquet", "bytes": 4556396850 },
+        { "path": "chroma-collections.parquet", "bytes": 559 },
+        { "path": "index/index_ddff7c4c-1c1b-4ff8-9901-662081a10007.bin", "bytes": 3344505192 },
+        { "path": "index/uuid_to_id_ddff7c4c-1c1b-4ff8-9901-662081a10007.pkl", "bytes": 41415806 },
+        { "path": "index/id_to_uuid_ddff7c4c-1c1b-4ff8-9901-662081a10007.pkl", "bytes": 35701560 },
+        { "path": "index/index_metadata_ddff7c4c-1c1b-4ff8-9901-662081a10007.pkl", "bytes": 109 }
+      ]
+    },
+    {
+      "dir": "chroma_db_open_ai_600",
+      "engine": "chroma", "embeddings": "open_ai", "chunk_size": 600,
+      "bytes": 2534910306, "human": "2.4 GiB",
+      "built": "2023-11-22T16:58:56Z .. 2023-11-22T18:26:13Z",
+      "files": [
+        { "path": "chroma-embeddings.parquet", "bytes": 1668153084 },
+        { "path": "chroma-collections.parquet", "bytes": 559 },
+        { "path": "index/index_6c058762-2a39-4931-b972-fc657223d949.bin", "bytes": 856872644 },
+        { "path": "index/uuid_to_id_6c058762-2a39-4931-b972-fc657223d949.pkl", "bytes": 5316652 },
+        { "path": "index/id_to_uuid_6c058762-2a39-4931-b972-fc657223d949.pkl", "bytes": 4567258 },
+        { "path": "index/index_metadata_6c058762-2a39-4931-b972-fc657223d949.pkl", "bytes": 109 }
+      ]
+    },
+    {
+      "dir": "chroma_db_hf4_600",
+      "engine": "chroma", "embeddings": "hf", "chunk_size": 600,
+      "bytes": 1108668382, "human": "1.0 GiB",
+      "built": "2023-11-26T21:32:47Z .. 2023-11-26T21:39:00Z",
+      "newest_store": true,
+      "files": [
+        { "path": "chroma-embeddings.parquet", "bytes": 660237687 },
+        { "path": "chroma-collections.parquet", "bytes": 559 },
+        { "path": "index/index_8f96cb2b-7d04-46aa-acd7-1a49e3bc8645.bin", "bytes": 438546116 },
+        { "path": "index/uuid_to_id_8f96cb2b-7d04-46aa-acd7-1a49e3bc8645.pkl", "bytes": 5316652 },
+        { "path": "index/id_to_uuid_8f96cb2b-7d04-46aa-acd7-1a49e3bc8645.pkl", "bytes": 4567259 },
+        { "path": "index/index_metadata_8f96cb2b-7d04-46aa-acd7-1a49e3bc8645.pkl", "bytes": 109 }
+      ]
+    },
+    {
+      "dir": "faiss_hf_index_100",
+      "engine": "faiss", "embeddings": "hf", "chunk_size": 100,
+      "bytes": 2849354774, "human": "2.7 GiB",
+      "built": "2023-11-22T20:39:07Z .. 2023-11-22T20:39:15Z",
+      "files": [
+        { "path": "index.faiss", "bytes": 2677681197 },
+        { "path": "index.pkl", "bytes": 171673577 }
+      ]
+    },
+    {
+      "dir": "faiss_openAI_index_600",
+      "engine": "faiss", "embeddings": "open_ai", "chunk_size": 600,
+      "bytes": 910851820, "human": "868 MiB",
+      "built": "2023-11-22T21:09:44Z .. 2023-11-22T21:09:45Z",
+      "files": [
+        { "path": "index.faiss", "bytes": 836653101 },
+        { "path": "index.pkl", "bytes": 74198719 }
+      ]
+    },
+    {
+      "dir": "faiss_hf_index_600",
+      "engine": "faiss", "embeddings": "hf", "chunk_size": 600,
+      "bytes": 492525292, "human": "470 MiB",
+      "built": "2023-11-22T20:07:32Z .. 2023-11-22T20:07:33Z",
+      "files": [
+        { "path": "index.faiss", "bytes": 418326573 },
+        { "path": "index.pkl", "bytes": 74198719 }
+      ]
+    }
+  ],
+
+  "observations": [
+    {
+      "id": "docstore-shared-at-600",
+      "note": "faiss_hf_index_600/index.pkl and faiss_openAI_index_600/index.pkl are identical in size (74198719). Consistent with one shared docstore over the same 600-char chunking, differing only in the vectors in index.faiss — i.e. a controlled comparison holding chunking fixed while varying the embedding model.",
+      "confidence": "high (size match; not hash-verified)"
+    },
+    {
+      "id": "chunk-size-dominates-size",
+      "note": "Moving chunk_size 100 -> 600 shrinks each store roughly 6-7x, consistently across both engines and both backends. With chunk_overlap fixed at 20, larger chunks mean far fewer vectors.",
+      "confidence": "high"
+    },
+    {
+      "id": "openai-vs-hf-size-gap",
+      "note": "At equal chunk size, the OpenAI stores are ~2.4x larger than the HuggingFace ones (ada-002 is 1536-dim vs all-mpnet-base-v2 at 768-dim — 2x — plus Chroma parquet overhead).",
+      "confidence": "high"
+    },
+    {
+      "id": "build-order",
+      "note": "Crawl first (2023-10-27), Chroma stores next (Nov 20-26), FAISS stores in one tight session (Nov 22). Notebook last touched Nov 28.",
+      "confidence": "high"
+    }
+  ],
+
+  "related_copies": {
+    "$comment": "This project is replicated in several places. mini-projects/nlp is canonical.",
+    "canonical": "mini-projects/nlp — 13.2 MB notebook WITH outputs, plus all seven vector stores",
+    "other": [
+      {
+        "path": "ML_SwitchUp/NLP/NVIDIA_LLM.ipynb",
+        "bytes": 92570,
+        "modified": "2024-01-03T20:22:00Z",
+        "relation": "EARLIER variant, not a later export. Has 64 cells vs 177 here, and contains no RAGAS evaluation code at all, despite its later mtime. Outputs stripped, no vector stores alongside. Superseded by mini-projects/nlp in every respect."
+      },
+      {
+        "path": "ML_SwitchUp/mini-projects/nlp_complete.zip",
+        "bytes": 26340000000,
+        "human": "~24.5 GiB",
+        "modified": "2024-03-28",
+        "relation": "packaged archive of this folder, made ~4 months after the last build. ~24.5 GiB vs 32.7 GiB live, so it likely omits some stores or compresses parquet/bin. Contents NOT verified."
+      }
+    ]
+  },
+
+  "reproduction": {
+    "regenerable": true,
+    "steps": [
+      "Load NVIDIA.xml sitemap index via langchain SitemapLoader (filter_urls as in notebook), continue_on_failure=True.",
+      "Split with RecursiveCharacterTextSplitter at chunk_size 100 or 600, chunk_overlap 20.",
+      "Embed with text-embedding-ada-002 (OpenAI) or sentence-transformers/all-mpnet-base-v2 (local).",
+      "Persist to Chroma or FAISS under the corresponding directory name.",
+      "Query via ConversationalRetrievalChain with search_kwargs={'k': 6}."
+    ],
+    "cost_warning": "Re-embedding ~59k pages at chunk_size=100 with ada-002 is a substantial paid API run. The OpenAI stores are the expensive cells to rebuild; the HuggingFace ones are compute-only.",
+    "drift_warning": "docs.nvidia.com has changed since 2023-10-27. A re-crawl will NOT reproduce these stores byte-for-byte, which is the main argument for preserving the artifacts rather than relying on regeneration."
+  },
+
+  "preservation_plan": {
+    "decision_date": "2026-08-18",
+    "git": "Source layer only — notebooks, NVIDIA.xml, error_log.txt, manifest.json, README. ~13 MB.",
+    "dvc": "All seven vector stores (~32.7 GiB) tracked by DVC, remote on Google Drive.",
+    "dvc_cache_note": "Set cache.type = reflink,hardlink,symlink,copy before `dvc add`. The volume is APFS, so reflinks make `dvc add` near-zero-cost on space; the default copy behavior would double 32.7 GiB against limited free disk.",
+    "excluded_from_git": ["*.parquet", "*.bin", "*.faiss", "*.pkl", "chroma_db_*/", "faiss_*_index_*/"]
+  },
+
+  "_provenance": {
+    "generated_by": "Claude Code session, read-only inventory pass",
+    "method": "find + stat for sizes and mtimes; grep over NVIDIA_LLM.ipynb, test.ipynb, error_log.txt, NVIDIA.xml for stack and config",
+    "verified": [
+      "All sizes and modification times.",
+      "Corpus source, sitemap URLs, and the 59,016-page count.",
+      "Library imports, embedding and generator model identifiers.",
+      "Chunk sizes, chunk overlap, top-k, and chain types.",
+      "Absence of any QLoRA/PEFT/quantization code in both notebooks."
+    ],
+    "not_verified": [
+      "No checksums were computed for any file.",
+      "Contents of nlp_complete.zip (~24.5 GiB) were not listed.",
+      "Exact document count after splitting (only pre-split page count is known).",
+      "Which of the two generator models was used for final results."
+    ],
+    "history": "v1.0 was generated while OneDrive served this tree as cloud-only placeholders and all content reads timed out; it was metadata-only. v1.1 was produced after hydration and replaces the inferred fields with verified ones."
+  },
+
+  "open_questions": [
+    "Does nlp_complete.zip contain the full tree? If so, the live stores could be pruned after DVC push.",
+    "Was faiss_openAI_index_100 skipped deliberately (embedding cost) or lost?",
+    "Which generator — Llama-2-7b-chat-hf or gpt-3.5-turbo — produced the results presented for the project?",
+    "How many chunks resulted at each chunk_size? Recoverable from the notebook outputs."
+  ]
+}

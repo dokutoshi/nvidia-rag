@@ -1,0 +1,42 @@
+# Vector stores — tracked by DVC, not git (32.7 GiB)
+/chroma_db_hf4_100
+/chroma_db_hf4_600
+/chroma_db_open_ai_100
+/chroma_db_open_ai_600
+/faiss_hf_index_100
+/faiss_hf_index_600
+/faiss_openAI_index_600
+*.parquet
+*.faiss
+*.pkl
+*.bin
+
+# Models
+*.gguf
+*.ggml
+*.pt
+*.safetensors
+
+# Secrets — this project uses OpenAI / HuggingFace API keys.
+# Credentials load from .env via python-dotenv; see .env.example.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+hf_auth_key*
+
+# Shell-redirect artifacts from a mistyped conda/pip install
+=*
+1.5.0
+
+# Notebook / Python noise
+.ipynb_checkpoints/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.venv/
+venv/
+
+# OS
+.DS_Store

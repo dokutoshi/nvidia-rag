@@ -1,0 +1,8 @@
+[core]
+    remote = storage
+[cache]
+    type = "reflink,hardlink,symlink,copy"
+['remote "storage"']
+    url = s3://hipster-dvc-storage-952936005450-us-east-1-an
+    profile = hipster-sso
+    region = us-east-1
