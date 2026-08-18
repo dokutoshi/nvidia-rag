@@ -1,0 +1,6 @@
+outs:
+- md5: 716da40427ee9a4303071e8c27e01a58.dir
+  size: 492525292
+  nfiles: 2
+  hash: md5
+  path: faiss_hf_index_600
